@@ -9,11 +9,14 @@ import 'package:sensors_plus/sensors_plus.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:simple_icons/simple_icons.dart';
 import 'package:url_launcher/url_launcher.dart';
+import 'package:refresh_rate/refresh_rate.dart';
 
 const double G = 9.80665;
 final Uri url = Uri.parse("https://github.com/babsalt/g_force_meter_diagram");
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  RefreshRate.enable();
   runApp(const MyApp());
 }
 
@@ -109,7 +112,7 @@ class _MyHomePageState extends State<MyHomePage> {
               ),
               SensorDisplay(
                   name: "Accelerometer",
-                  eventStream: accelerometerEventStream(samplingPeriod: SensorInterval.gameInterval),
+                  eventStream: accelerometerEventStream(samplingPeriod: SensorInterval.lowInterval),
                   eventToDoubles: (e) {
                     return <double>[e.x, e.y, e.z];
                   },
@@ -119,7 +122,7 @@ class _MyHomePageState extends State<MyHomePage> {
                   }),
               SensorDisplay(
                   name: "(w/o gravity)",
-                  eventStream: userAccelerometerEventStream(samplingPeriod: SensorInterval.gameInterval),
+                  eventStream: userAccelerometerEventStream(samplingPeriod: SensorInterval.lowInterval),
                   eventToDoubles: (e) {
                     return <double>[e.x, e.y, e.z];
                   },
