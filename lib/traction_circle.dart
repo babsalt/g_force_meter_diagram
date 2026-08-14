@@ -22,12 +22,22 @@ class TractionCircle extends StatefulWidget {
   /// rate and the sensor sampling period.
   final Duration smoothing;
 
+  /// Optional ring buffer of recent [lateralG, longitudinalG] readings.
+  /// Pass alongside [trailStart] — the index of the oldest entry in the
+  /// buffer (i.e. the next slot due to be overwritten) — so the trail can
+  /// be read out in chronological order without needing to reallocate a
+  /// reordered copy every frame.
+  final List<List<double>>? trail;
+  final int trailStart;
+
   const TractionCircle({
     super.key,
     required this.lateralG,
     required this.longitudinalG,
-    this.maxG = 1.5,
-    this.smoothing = const Duration(milliseconds: 20),
+    this.maxG = 1.1,
+    this.smoothing = const Duration(milliseconds: 120),
+    this.trail,
+    this.trailStart = 0,
   });
 
   @override
@@ -72,13 +82,22 @@ class _TractionCircleState extends State<TractionCircle>
 
   @override
   Widget build(BuildContext context) {
-    return CustomPaint(
-      size: const Size(300, 300),
-      painter: _TractionCirclePainter(
-        lateralG: _current.dx,
-        longitudinalG: _current.dy,
-        maxG: widget.maxG,
-      ),
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        // Fill whatever box the parent gives us. Pair this widget with
+        // AspectRatio(aspectRatio: 1) at the call site to keep it square.
+        final size = constraints.maxWidth;
+        return CustomPaint(
+          size: Size(size, size),
+          painter: _TractionCirclePainter(
+            lateralG: _current.dx,
+            longitudinalG: _current.dy,
+            maxG: widget.maxG,
+            trail: widget.trail,
+            trailStart: widget.trailStart,
+          ),
+        );
+      },
     );
   }
 }
@@ -87,12 +106,30 @@ class _TractionCirclePainter extends CustomPainter {
   final double lateralG;
   final double longitudinalG;
   final double maxG;
+  final List<List<double>>? trail;
+  final int trailStart;
 
   _TractionCirclePainter({
     required this.lateralG,
     required this.longitudinalG,
     required this.maxG,
+    this.trail,
+    this.trailStart = 0,
   });
+
+  /// Converts a raw [lateralG, longitudinalG] reading into a canvas
+  /// position, using the same normalize-and-clamp logic as the dot so
+  /// trail points line up exactly with where the dot would be.
+  Offset _project(double g1, double g2, Offset center, double radius) {
+    double nx = (g1 / maxG).clamp(-1.0, 1.0);
+    double ny = (g2 / maxG).clamp(-1.0, 1.0);
+    final magnitude = sqrt(nx * nx + ny * ny);
+    if (magnitude > 1.0) {
+      nx /= magnitude;
+      ny /= magnitude;
+    }
+    return Offset(center.dx + nx * radius, center.dy - ny * radius);
+  }
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -118,21 +155,34 @@ class _TractionCirclePainter extends CustomPainter {
     canvas.drawLine(Offset(center.dx, center.dy - radius),
         Offset(center.dx, center.dy + radius), gridPaint);
 
-    // Normalize G values to [-1, 1] range relative to maxG
-    double normX = (lateralG / maxG).clamp(-1.0, 1.0);
-    double normY = (longitudinalG / maxG).clamp(-1.0, 1.0);
-
-    // Clamp the dot to the circle edge if the combined magnitude exceeds it
-    final magnitude = sqrt(normX * normX + normY * normY);
-    if (magnitude > 1.0) {
-      normX /= magnitude;
-      normY /= magnitude;
+    // Fading trail: read the ring buffer starting at trailStart (the
+    // oldest entry) so it comes out chronological without allocating a
+    // reordered copy. Draw each segment with rising opacity so the
+    // newest points are brightest and the oldest fade toward invisible.
+    final trailPoints = trail;
+    if (trailPoints != null && trailPoints.length > 1) {
+      final n = trailPoints.length;
+      for (var i = 1; i < n; i++) {
+        final prev = trailPoints[(trailStart + i - 1) % n];
+        final curr = trailPoints[(trailStart + i) % n];
+        final p0 = _project(prev[0], prev[2], center, radius);
+        final p1 = _project(curr[0], curr[2], center, radius);
+        final opacity = i / n; // 0 (oldest) -> 1 (newest)
+        canvas.drawLine(
+          p0,
+          p1,
+          Paint()
+            ..color = Colors.redAccent.withOpacity(opacity * 0.5)
+            ..strokeWidth = 4
+            ..strokeCap = StrokeCap.round,
+        );
+      }
     }
 
-    final dotOffset = Offset(
-      center.dx + normX * radius,
-      center.dy - normY * radius, // invert Y: up = positive (accel)
-    );
+    // Dot always draws, independent of whether a trail exists — this
+    // uses the live smoothed lateralG/longitudinalG, not a historical
+    // trail point.
+    final dotOffset = _project(lateralG, longitudinalG, center, radius);
 
     canvas.drawCircle(dotOffset, 10, Paint()..color = Colors.redAccent);
     canvas.drawCircle(
@@ -148,6 +198,8 @@ class _TractionCirclePainter extends CustomPainter {
   @override
   bool shouldRepaint(covariant _TractionCirclePainter oldDelegate) {
     return oldDelegate.lateralG != lateralG ||
-        oldDelegate.longitudinalG != longitudinalG;
+        oldDelegate.longitudinalG != longitudinalG ||
+        oldDelegate.trail != trail ||
+        oldDelegate.trailStart != trailStart;
   }
 }

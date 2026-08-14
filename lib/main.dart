@@ -14,9 +14,10 @@ import 'package:refresh_rate/refresh_rate.dart';
 const double G = 9.80665;
 final Uri url = Uri.parse("https://github.com/babsalt/g_force_meter_diagram");
 
-void main() async {
+void main() {
   WidgetsFlutterBinding.ensureInitialized();
   RefreshRate.enable();
+  // print(RefreshRate.info);
   runApp(const MyApp());
 }
 
@@ -27,8 +28,14 @@ class MyApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'Flutter Demo',
-      theme: ThemeData(primarySwatch: Colors.pink),
-      home: const MyHomePage(title: 'whats good beast'),
+      theme: ThemeData(
+        colorScheme: ColorScheme.fromSeed(
+          seedColor: Colors.pink,
+          brightness: Brightness.dark,
+        ),
+        scaffoldBackgroundColor: Colors.black,
+      ),
+      home: const MyHomePage(title: 'G-Force'),
     );
   }
 }
@@ -48,6 +55,8 @@ class _MyHomePageState extends State<MyHomePage> {
   double gForceY = double.nan;
   double gForceZ = double.nan;
   bool noGravity = false;
+  var trail = List.generate(100, (_) => [0.0, 0.0, 0.0]);
+  int stack = 0;
 
   SharedPreferences? prefs;
 
@@ -59,6 +68,8 @@ class _MyHomePageState extends State<MyHomePage> {
     }
     gForceTmp = sqrt(gForceTmp);
     setState(() {
+      trail[stack] = [vec[0] /G, vec[1] / G, vec[2] / G];
+      stack = (stack + 1) % 100;
       gForceMagn = gForceTmp / G;
       gForceX = vec[0] / G;
       gForceY = vec[1] / G;
@@ -80,7 +91,7 @@ class _MyHomePageState extends State<MyHomePage> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: <Widget>[
-              GForceDisplay(gForceMagn, leftText: "Magnitude:"),
+              GForceDisplay(gForceMagn, leftText: "Magnitude:", fontSize: 60),
               Row(children: [
                 Expanded(
                   child: GForceDisplay(gForceX,
@@ -142,10 +153,17 @@ class _MyHomePageState extends State<MyHomePage> {
                   eventToDoubles: (e) {
                     return <double>[e.x, e.y, e.z];
                   }),
-              const SizedBox(height: 16),
-              TractionCircle(
-                lateralG: gForceX.isNaN ? 0 : gForceX,
-                longitudinalG: gForceY.isNaN ? 0 : gForceY,
+              FractionallySizedBox(
+                widthFactor: 0.95,
+                child: AspectRatio(
+                  aspectRatio: 1,
+                  child: TractionCircle(
+                    lateralG: gForceX.isNaN ? 0 : gForceX,
+                    longitudinalG: gForceY.isNaN ? 0 : gForceZ,
+                    trail: trail,
+                    trailStart: stack,
+                  ),
+                ),
               ),
             ],
           ),
