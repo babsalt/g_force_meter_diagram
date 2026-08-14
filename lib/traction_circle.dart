@@ -35,7 +35,7 @@ class TractionCircle extends StatefulWidget {
     required this.lateralG,
     required this.longitudinalG,
     this.maxG = 1.1,
-    this.smoothing = const Duration(milliseconds: 120),
+    this.smoothing = const Duration(milliseconds: 12),
     this.trail,
     this.trailStart = 0,
   });
@@ -161,22 +161,29 @@ class _TractionCirclePainter extends CustomPainter {
     // newest points are brightest and the oldest fade toward invisible.
     final trailPoints = trail;
     if (trailPoints != null && trailPoints.length > 1) {
-      final n = trailPoints.length;
-      for (var i = 1; i < n; i++) {
-        final prev = trailPoints[(trailStart + i - 1) % n];
-        final curr = trailPoints[(trailStart + i) % n];
-        final p0 = _project(prev[0], prev[2], center, radius);
-        final p1 = _project(curr[0], curr[2], center, radius);
-        final opacity = i / n; // 0 (oldest) -> 1 (newest)
-        canvas.drawLine(
-          p0,
-          p1,
-          Paint()
-            ..color = Colors.redAccent.withOpacity(opacity * 0.5)
-            ..strokeWidth = 4
-            ..strokeCap = StrokeCap.round,
-        );
+      final projectedTrail = List<Offset>.generate(
+        trailPoints.length,
+        (index) {
+          final bufferIndex = (trailStart + index) % trailPoints.length;
+          final point = trailPoints[bufferIndex];
+          return _project(point[0], point[2], center, radius);
+        },
+      );
+
+      canvas.saveLayer(Offset.zero & size, Paint());
+      for (int i = 0; i < projectedTrail.length - 1; i++) {
+        final fadeOpacity = (i + 1) / projectedTrail.length;
+
+        final paint = Paint()
+          ..color = Colors.red.withOpacity(fadeOpacity)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 4.0
+          ..strokeCap = StrokeCap.round
+          ..blendMode = BlendMode.src;
+
+        canvas.drawLine(projectedTrail[i], projectedTrail[i + 1], paint);
       }
+      canvas.restore();
     }
 
     // Dot always draws, independent of whether a trail exists — this

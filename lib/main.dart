@@ -50,30 +50,44 @@ class MyHomePage extends StatefulWidget {
 }
 
 class _MyHomePageState extends State<MyHomePage> {
-  double gForceMagn = double.nan;
-  double gForceX = double.nan;
-  double gForceY = double.nan;
-  double gForceZ = double.nan;
+  double gForceMagn = 0.0;
+  double gForceX = 0.0;
+  double gForceY = 0.0;
+  double gForceZ = 0.0;
   bool noGravity = false;
-  var trail = List.generate(100, (_) => [0.0, 0.0, 0.0]);
+  var trail = List.generate(150, (_) => [0.0, 0.0, 0.0]);
   int stack = 0;
+  var offsetX = 0.0;
+  var offsetY = 0.0;
+  var offsetZ = 0.0;
 
   SharedPreferences? prefs;
 
+  final double alpha = 0.5;
+
   void updateGForce(List<double>? vec) {
     if (vec == null) return;
-    double gForceTmp = 0;
-    for (double val in vec) {
-      gForceTmp += val * val;
+
+    double rawX = vec[0] / G;
+    double rawY = vec[1] / G;
+    double rawZ = vec[2] / G;
+
+    if (!noGravity) {
+      rawX -= offsetX;
+      rawY -= offsetY;
+      rawZ -= offsetZ;
     }
-    gForceTmp = sqrt(gForceTmp);
+
     setState(() {
-      trail[stack] = [vec[0] /G, vec[1] / G, vec[2] / G];
-      stack = (stack + 1) % 100;
-      gForceMagn = gForceTmp / G;
-      gForceX = vec[0] / G;
-      gForceY = vec[1] / G;
-      gForceZ = vec[2] / G;
+      //(alpha * New) + ((1 - alpha) * Old)
+      gForceX = (alpha * rawX) + ((1.0 - alpha) * gForceX);
+      gForceY = (alpha * rawY) + ((1.0 - alpha) * gForceY);
+      gForceZ = (alpha * rawZ) + ((1.0 - alpha) * gForceZ);
+
+      gForceMagn = sqrt((gForceX * gForceX) + (gForceY * gForceY) + (gForceZ * gForceZ));
+
+      trail[stack] = [gForceX, gForceY, gForceZ];
+      stack = (stack + 1) % 150;
     });
   }
 
@@ -118,7 +132,7 @@ class _MyHomePageState extends State<MyHomePage> {
                         });
                         prefs?.setBool("noGravity", newValue);
                       }),
-                  const Text("w/o gravity")
+                  const Text("w/o gravity (less responsive)")
                 ],
               ),
               SensorDisplay(
@@ -141,18 +155,18 @@ class _MyHomePageState extends State<MyHomePage> {
                     if (!noGravity) return;
                     updateGForce(vec);
                   }),
-              SensorDisplay(
-                  name: "Gyroscope",
-                  eventStream: gyroscopeEventStream(),
-                  eventToDoubles: (e) {
-                    return <double>[e.x, e.y, e.z];
-                  }),
-              SensorDisplay(
-                  name: "Magnetometer",
-                  eventStream: magnetometerEventStream(),
-                  eventToDoubles: (e) {
-                    return <double>[e.x, e.y, e.z];
-                  }),
+              // SensorDisplay(
+              //     name: "Gyroscope",
+              //     eventStream: gyroscopeEventStream(),
+              //     eventToDoubles: (e) {
+              //       return <double>[e.x, e.y, e.z];
+              //     }),
+              // SensorDisplay(
+              //     name: "Magnetometer",
+              //     eventStream: magnetometerEventStream(),
+              //     eventToDoubles: (e) {
+              //       return <double>[e.x, e.y, e.z];
+              //     }),
               FractionallySizedBox(
                 widthFactor: 0.95,
                 child: AspectRatio(
@@ -165,6 +179,16 @@ class _MyHomePageState extends State<MyHomePage> {
                   ),
                 ),
               ),
+              TextButton(
+                onPressed: () {
+                  setState(() {
+                    offsetX = offsetX + (trail[(stack - 1 + 150) % 150][0] + trail[(stack - 2 + 150) % 150][0] + trail[(stack - 3 + 150) % 150][0]) / 3.0;
+                    offsetY = offsetY + (trail[(stack - 1 + 150) % 150][1] + trail[(stack - 2 + 150) % 150][1] + trail[(stack - 3 + 150) % 150][1]) / 3.0;
+                    offsetZ = offsetZ + (trail[(stack - 1 + 150) % 150][2] + trail[(stack - 2 + 150) % 150][2] + trail[(stack - 3 + 150) % 150][2]) / 3.0;
+                  });
+                },
+                child: const Text('Calibrate'),
+              )
             ],
           ),
         ),
