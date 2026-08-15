@@ -82,7 +82,7 @@ class _MyHomePageState extends State<MyHomePage> {
       //(alpha * New) + ((1 - alpha) * Old)
       gForceX = (alpha * rawX) + ((1.0 - alpha) * gForceX);
       gForceY = (alpha * rawY) + ((1.0 - alpha) * gForceY);
-      gForceZ = (alpha * rawZ) + ((1.0 - alpha) * gForceZ);
+      gForceZ = -(alpha * rawZ) + ((1.0 - alpha) * gForceZ);
 
       gForceMagn = sqrt((gForceX * gForceX) + (gForceY * gForceY) + (gForceZ * gForceZ));
 
