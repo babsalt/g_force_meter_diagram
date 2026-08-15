@@ -63,7 +63,7 @@ class _MyHomePageState extends State<MyHomePage> {
 
   SharedPreferences? prefs;
 
-  final double alpha = 0.5;
+  final double alpha = 0.25;
 
   void updateGForce(List<double>? vec) {
     if (vec == null) return;
@@ -75,7 +75,7 @@ class _MyHomePageState extends State<MyHomePage> {
     if (!noGravity) {
       rawX -= offsetX;
       rawY -= offsetY;
-      rawZ -= offsetZ;
+      rawZ += offsetZ;
     }
 
     setState(() {
